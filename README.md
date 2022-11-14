@@ -53,3 +53,8 @@ n       script-binding createChapter
 Ctrl+D  script-binding deletechapters
 R       script-binding reloadTrs
 ```
+
+### Acknowledgements
+
+* @po5 for his help, check out his thumbnailer script [thumbfast](https://github.com/po5/thumbfast)
+* Tomas Klaen for making [uosc](https://github.com/tomasklaen/uosc)
