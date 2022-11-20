@@ -1,6 +1,11 @@
 
+local encodingargs = {
+	H264_CPU = "-c:v libx264 ...",
+    H265_CPU = "-c:v libx265 .."
+}
+
 local dur = 2500
-	-- Duration of OSC (top left) messages, in milliseconds,
+	-- Duration of OSC (top left) messages, in milliseconds
 
 local verbose = false
 local mode = 'trim'
@@ -9,12 +14,10 @@ local mode = 'trim'
 local mp = require 'mp'
 local msg = require 'mp.msg'
 local utils = require 'mp.utils'
-local options = require 'mp.options'
 
 Osdwarn = false -- Used when user made too many trimming points
 Trs = {} -- Creates a fresh empty table, will be appended start/fin timecodes
 Index = 1 -- Selects the trim 1, for it to be increased/decreased later
-local direcseparator = package.config:sub(1, 1) -- Returns / on *nix and \ on Windows
 
 local function verb(...)
 	local args = {...}
@@ -73,33 +76,43 @@ local function round(int)
 	return (math.floor(int * 100))/100
 end
 
+local function get_fn()
 
-local function basename (filepath)
-	local t={}
-	for str in string.gmatch(filepath, "([^"..direcseparator.."]+)") do
-	 table.insert(t, str)
-	end
-	return t[#t]
+	local fn  = utils.join_path(mp.get_property("working-directory", ""), (mp.get_property("path", "")))
+
+	assert(io.open(fn, "r"), "\nFailed to get path " .. fn .. " insufficient permissions?")
+
+	return fn
+
+end
+
+
+
+local function get_basename (path)
+
+	local _, basename = utils.split_path(path)
+	assert(basename, "Failed to get basename from " .. path)
+	return basename
+
 end
 
 
 
 
 local function selectindex ()
-	local fps = mp.get_property('container-fps')
+	-- local fps = mp.get_property('container-fps')
 
-	local utils = require('mp.utils')
 	local menu = {
-	type = 'menu_type',
-	title = 'Select an index to switch back to',
-	items = {}
+		type  = 'menu_type',
+		title = 'Select an index to switch back to',
+		items = {}
 	}
 	for i, cur in ipairs(Trs) do
 	if cur['start'] or cur['end'] then
 		menu['items'][i] = {}					     --/fps                                --/fps
 		menu['items'][i]['title'] = (round(cur['start']) or '') .. ' - ' .. (round(cur['fin']) or '')
 		menu['items'][i]['value'] = "script-message setindex " .. i
-		menu['items'][i]['hint'] = basename(cur['path'])
+		menu['items'][i]['hint'] = get_basename(cur['path'])
 	end
 	end
 
@@ -146,6 +159,7 @@ end;mp.add_key_binding("n", "createChapter", create_chapter)
 
 local function deletechapters()
 	mp.set_property_native("chapter-list", {})
+
 end;mp.add_key_binding("Ctrl+D", "deletechapters", deletechapters)
 
 
@@ -158,9 +172,7 @@ local function reloadTrs()
 		-- Delete all chapters
 	
 	for i, val in pairs(Trs) do
-		if val['path'] == mp.get_property('stream-open-filename') then
-
-			print(i)
+		if val['path'] == get_fn() then
 
 			if Trs[i]['start'] then
 				create_chapter(Trs[i]['start'])
@@ -221,7 +233,6 @@ end;mp.add_key_binding("c", "decreaseIndex", decrIndex)
 
 
 local function showPoints()
-	local fps = mp.get_property('container-fps')
 
 	if verbose then
 		print(utils.format_json(Trs))		
@@ -234,15 +245,14 @@ local function showPoints()
 
 	msg = "Trimming points:"
 	if #Trs > 11 and Osdwarn == false	then
-		notify(dur, "You have too much trimming points\n for it to fit on the OSD, check the console.")
+		notify(dur, "You have too much trimming points\nfor it to fit on the OSD, check the console.")
 		Osdwarn = true
 		return
-		elseif #Trs > 11 and Osdwarn == true then
-			return
 	end
+
 	for ind, _ in ipairs(Trs) do
-		if Trs[ind].path ~= nil then
-			msg = msg .. "\n" .. "[" .. ind .. "] " .. basename(Trs[ind].path)
+		if Trs[ind]['path'] ~= nil then
+			msg = msg .. "\n" .. "[" .. ind .. "] " .. get_basename(Trs[ind]['path'])
 		end
 		if Trs[ind].start ~= nil then							       --/fps
 			msg = msg .. " : " .. string.sub(string.format(Trs[ind].start), 1, 4)
@@ -262,17 +272,10 @@ local function getIndex()
 	notify(dur, "[g] Selected index is ".. Index)
 end;mp.add_key_binding("Ctrl+g", "getCurrentIndex", getIndex)
 
-
-
-
 local function start()
 	local pos = mp.get_property_number('playback-time/full')
-	local fn = mp.get_property("stream-open-filename")
+	local fn = get_fn()
 	local curframe = mp.get_property_number('time-pos')
-
-	if string.match(fn,direcseparator) == nil then -- If running on command line stuff like 'mpv *.mp4' it doesn't provide full path
-		fn = mp.get_property("working-directory")..direcseparator..fn
-	end
 
 	if Trs[Index] == nil then Trs[Index] = {} end
 	Trs[Index]['start'] = curframe
@@ -299,12 +302,13 @@ end;mp.add_key_binding("G", "set-sof", sof)
 local function fin()
 
 	local pos = mp.get_property_number('playback-time/full')
-	local fn = mp.get_property("stream-open-filename")
+	local fn = get_fn()
 	local curframe = mp.get_property_number('time-pos')
 	if Trs[Index] == nil then Trs[Index] = {} end
 	Trs[Index]['fin'] = curframe
-	if string.match(fn,direcseparator) == nil then -- If running on command line stuff like *.mp4 it doesn't provide full path
-		fn = mp.get_property("working-directory")..direcseparator..fn
+
+	if (io.open(fn, "r") == nil) then
+		fn = utils.join_path(utils.getcwd(), fn)
 	end
 
 	if Trs[Index]['start'] == nil and Trs[Index-1]['start'] ~= nil then
