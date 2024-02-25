@@ -2,7 +2,7 @@ param(
     [switch]$clean
 )
 
-set-location $psscriptroot
+set-location $psscriptroot/../..
 
 if(-not(test-path ./slc-out/)){
     mkdir ./slc-out/
