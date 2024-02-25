@@ -5,16 +5,16 @@ local smoothie_rs_path = [[D:\smoothie-rs\bin\smoothie-rs.exe]]
 -- defaults to checking in path
 
 local cut_mode = 'trim'
-    -- available modes (can be cycled through by pressing k):
+-- available modes (can be cycled through by pressing k):
 
-	-- trim: merge each file's own cut to a single file
-	-- split: each cut is exported in it's own file
+-- trim: merge each file's own cut to a single file
+-- split: each cut is exported in it's own file
 
 local dur = 2500
-	-- Duration of OSC (top left) messages, in milliseconds
+-- Duration of OSC (top left) messages, in milliseconds
 
 local verbose = false
-    -- Off by default, can be toggled by pressing Ctrl+v
+-- Off by default, can be toggled by pressing Ctrl+v
 
 
 local mp = require 'mp'
@@ -22,15 +22,15 @@ local msg = require 'mp.msg'
 local utils = require 'mp.utils'
 
 Osdwarn = false -- Used when user made too many trimming points
-Trs = {} -- Creates a fresh empty table, will be appended start/fin timecodes
-Index = 1 -- Selects the trim 1, for it to be increased/decreased later
+Trs = {}        -- Creates a fresh empty table, will be appended start/fin timecodes
+Index = 1       -- Selects the trim 1, for it to be increased/decreased later
 
 local function verb(...)
-	local args = {...}
+	local args = { ... }
 	local text = ""
 
 	for i, v in ipairs(args) do
-	text = text .. tostring(v)
+		text = text .. tostring(v)
 	end
 	if verbose == true then
 		print("VERB", text)
@@ -40,11 +40,11 @@ end
 
 
 local function notify(duration, ...)
-	local args = {...}
+	local args = { ... }
 	local text = ""
 
 	for i, v in ipairs(args) do
-	text = text .. tostring(v)
+		text = text .. tostring(v)
 	end
 
 	if text == nil then
@@ -59,18 +59,18 @@ end
 
 local function dump()
 	local vals = {
-		'container-fps','time-pos',
+		'container-fps', 'time-pos',
 		'playback-time/full', 'stream-open-filename',
 		'estimated-frame-number', 'duration'
 	}
 	for _, val in ipairs(vals) do
 		print(val, ": ", mp.get_property(val))
 	end
-end;mp.add_key_binding("Ctrl+d", "dump", dump)
+end; mp.add_key_binding("Ctrl+d", "dump", dump)
 
 
 
-local function setindex (index)
+local function setindex(index)
 	notify(dur, ("Setting index to [" .. index .. "]"))
 	Index = index
 end
@@ -79,12 +79,11 @@ mp.register_script_message('setindex', setindex)
 
 
 local function round(int)
-	return (math.floor(int * 100))/100
+	return (math.floor(int * 100)) / 100
 end
 
 local function get_fn()
-
-	local fn  = utils.join_path(mp.get_property("working-directory", ""), (mp.get_property("path", "")))
+	local fn = utils.join_path(mp.get_property("working-directory", ""), (mp.get_property("path", "")))
 
 	assert(io.open(fn, "r"), "\nFailed to get path " .. fn .. " insufficient permissions?")
 
@@ -102,18 +101,16 @@ end
 
 
 
-local function get_basename (path)
-
+local function get_basename(path)
 	local _, basename = utils.split_path(path)
 	assert(basename, "Failed to get basename from " .. path)
 	return basename
-
 end
 
 
 
 
-local function selectindex ()
+local function selectindex()
 	-- local fps = mp.get_property('container-fps')
 
 	local menu = {
@@ -131,8 +128,7 @@ local function selectindex ()
 	end
 
 	mp.commandv('script-message-to', 'uosc', 'open-menu', (utils.format_json(menu)))
-
-end;mp.add_key_binding("Ctrl+t", "selectindex", selectindex)
+end; mp.add_key_binding("Ctrl+t", "selectindex", selectindex)
 
 
 
@@ -157,7 +153,7 @@ local function create_chapter(time_pos)
 		for i = chapter_count, curr_chapter + 2, -1 do
 			all_chapters[i + 1] = all_chapters[i]
 		end
-		all_chapters[curr_chapter+2] = {
+		all_chapters[curr_chapter + 2] = {
 			title = "",
 			time = time_pos
 		}
@@ -165,16 +161,14 @@ local function create_chapter(time_pos)
 	mp.set_property_native("chapter-list", all_chapters)
 	--mp.set_property_number("chapter", curr_chapter+1)
 	time_pos = nil
-
-end;mp.add_key_binding("n", "createChapter", create_chapter)
+end; mp.add_key_binding("n", "createChapter", create_chapter)
 
 
 
 
 local function deletechapters()
 	mp.set_property_native("chapter-list", {})
-
-end;mp.add_key_binding("Ctrl+D", "deletechapters", deletechapters)
+end; mp.add_key_binding("Ctrl+D", "deletechapters", deletechapters)
 
 
 
@@ -183,16 +177,14 @@ local function reloadTrs()
 	-- rebuilds chapters from Trs
 
 	mp.set_property_native("chapter-list", {})
-		-- Delete all chapters
-	
+	-- Delete all chapters
+
 	for i, val in pairs(Trs) do
 		if val['path'] == get_fn() then
-
 			if Trs[i]['start'] then
 				create_chapter(Trs[i]['start'])
 			else
 				verb("not creating start chapter for index ", i)
-
 			end
 
 			if Trs[i]['fin'] then
@@ -203,27 +195,26 @@ local function reloadTrs()
 		end
 	end
 end;
-	mp.add_key_binding("R", "reloadTrs", reloadTrs)
-	mp.register_event("file-loaded", reloadTrs)
+mp.add_key_binding("R", "reloadTrs", reloadTrs)
+mp.register_event("file-loaded", reloadTrs)
 
 
 
 
 local function incrIndex()
-
-	if #Trs < 2 and Trs[Index+1] == nil then
+	if #Trs < 2 and Trs[Index + 1] == nil then
 		notify(dur, "You only have one starter index,\nstart making a second index before cycling through them.")
 		return
 	end
 
-	if Trs[Index+1] == nil then
+	if Trs[Index + 1] == nil then
 		Index = 1 -- Looping through
-		notify(dur, "[c] (Looping) Increased index back down to ".. Index)
+		notify(dur, "[c] (Looping) Increased index back down to " .. Index)
 	else
 		Index = Index + 1
-		notify(dur, "[C] Increased index to ".. Index)
+		notify(dur, "[C] Increased index to " .. Index)
 	end
-end;mp.add_key_binding("C", "increaseIndex", incrIndex)
+end; mp.add_key_binding("C", "increaseIndex", incrIndex)
 
 
 
@@ -236,20 +227,19 @@ local function decrIndex()
 
 	if Trs[Index - 1] == nil then
 		Index = #Trs -- Looping through
-		notify(dur, "[c] (Looping) Lowered index back up to ".. Index)
+		notify(dur, "[c] (Looping) Lowered index back up to " .. Index)
 	else
 		Index = Index - 1
-		notify(dur, "[c] Lowered index to ".. Index)
+		notify(dur, "[c] Lowered index to " .. Index)
 	end
-end;mp.add_key_binding("c", "decreaseIndex", decrIndex)
+end; mp.add_key_binding("c", "decreaseIndex", decrIndex)
 
 
 
 
 local function showPoints()
-
 	if verbose then
-		print(utils.format_json(Trs))		
+		print(utils.format_json(Trs))
 	end
 
 	if #Trs == 0 then
@@ -258,7 +248,7 @@ local function showPoints()
 	end
 
 	msg = "Trimming points:"
-	if #Trs > 11 and Osdwarn == false	then
+	if #Trs > 11 and Osdwarn == false then
 		notify(dur, "You have too much trimming points\nfor it to fit on the OSD, check the console.")
 		Osdwarn = true
 		return
@@ -268,27 +258,26 @@ local function showPoints()
 		if Trs[ind]['path'] ~= nil then
 			msg = msg .. "\n" .. "[" .. ind .. "] " .. get_basename(Trs[ind]['path'])
 		end
-		if Trs[ind].start ~= nil then							       --/fps
+		if Trs[ind].start ~= nil then --/fps
 			msg = msg .. " : " .. string.sub(string.format(Trs[ind].start), 1, 4)
 		end
-		if Trs[ind].fin ~= nil then								     --/fps
+		if Trs[ind].fin ~= nil then --/fps
 			msg = msg .. " - " .. string.sub(string.format(Trs[ind].fin), 1, 4)
 		end
 	end
 	print(msg)
-	mp.osd_message(msg, dur/500) -- 2x longer than normal dur, divide by / 1000 for same length
-end;mp.add_key_binding("Ctrl+p", "showPoints", showPoints)
+	mp.osd_message(msg, dur / 500) -- 2x longer than normal dur, divide by / 1000 for same length
+end; mp.add_key_binding("Ctrl+p", "showPoints", showPoints)
 
 
 
 
 local function getIndex()
-	notify(dur, "[g] Selected index is ".. Index)
-end;mp.add_key_binding("Ctrl+g", "getCurrentIndex", getIndex)
+	notify(dur, "[g] Selected index is " .. Index)
+end; mp.add_key_binding("Ctrl+g", "getCurrentIndex", getIndex)
 
 
 local function initIndex()
-
 	if Trs[Index] == nil then
 		Trs[Index] = {}
 	end
@@ -317,7 +306,6 @@ local function start(sof)
 end; mp.add_key_binding("g", "set-start", start)
 
 local function sof()
-	
 	start(true)
 
 	-- will probably remove the rest of this function later
@@ -352,7 +340,7 @@ local function fin(eof)
 
 	Trs[Index]['path'] = fn
 
-	notify(dur, "[h] Set end point of index ["..Index.."] at ".. round(pos))
+	notify(dur, "[h] Set end point of index [" .. Index .. "] at " .. round(pos))
 
 	if Trs[Index + 1] == nil then
 		Trs[Index + 1] = {}
@@ -494,7 +482,7 @@ local function render()
 		ffi.C.system(smoothie_rs_path .. " " .. command)
 	end
 	mp.commandv('quit')
-end;mp.add_key_binding("Ctrl+r", "exportSLC", render)
+end; mp.add_key_binding("Ctrl+r", "exportSLC", render)
 
 
 
@@ -520,4 +508,4 @@ local function toggleVerb()
 		notify(dur, "[Ctrl+v] toggled on Verbose")
 		verbose = true
 	end
-end;mp.add_key_binding("Ctrl+v", "toggleSLCverbose", toggleVerb)
+end; mp.add_key_binding("Ctrl+v", "toggleSLCverbose", toggleVerb)
