@@ -1,5 +1,5 @@
 > [!WARNING]
-> ffmpeg export is not supported, only with [smoothie-rs](https://github.com/couleur-tweak-tips/smoothie-rs), see [alternatives](#alternatives) for now
+> ffmpeg export is not supported, it currently only is with [smoothie-rs](https://github.com/couleur-tweak-tips/smoothie-rs), see [alternatives](#alternatives) for now
 
 # suckless-cut
 
@@ -63,7 +63,7 @@ After setting a start and end point, setting another start point will automatica
 
 * <kbd>Ctrl-p</kbd> prints all indexes to console & OSD
 
-* <kbd>Ctrl+t</kbd> (required [uosc](https://github.com/tomasklaen/uosc) installed) graphical index selector
+* <kbd>Ctrl+t</kbd> (requires [uosc](https://github.com/tomasklaen/uosc) installed) graphical index selector
 
 ![image](https://github.com/couleur-tweak-tips/suckless-cut/releases/download/readme-assets/selector.webp)
 
