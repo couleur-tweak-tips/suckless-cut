@@ -442,6 +442,7 @@ local function render()
 
 				arg = arg .. ';' .. timecodes['start'] .. '-' .. timecodes['fin']
 			end
+			arg = '"' .. arg .. '"'
 			table.insert(Cmd.args, arg)
 			Commands[#Commands + 1] = Cmd
 		end
