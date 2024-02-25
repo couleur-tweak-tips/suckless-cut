@@ -1,0 +1,36 @@
+name: Rust
+
+on:
+  push:
+    branches: [ "main" ]
+
+jobs:
+  release-win:
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      matrix:
+        os: [windows-2022]
+    
+    steps:
+
+    - uses: actions/checkout@v3
+      with:
+        submodules: recursive
+
+    - name: Ship
+      shell: pwsh
+      run: ./.github/workflows/shipper.ps1
+
+    - name: Generate release tag
+      id: tag
+      run: echo "::set-output name=release_tag::Nightly_$(date +"%Y.%m.%d_%H-%M")"
+
+    - uses: softprops/action-gh-release@v1
+      with:
+        tag_name: ${{ steps.tag.outputs.release_tag }}
+        prerelease: true
+        fail_on_unmatched_files: true
+        files: |
+          ./suckless-cut.lua
+          ./suckless-cut_with-recommended-scripts.zip
