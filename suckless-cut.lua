@@ -1,15 +1,21 @@
+local default_export_mode = "smoothie"
+-- may also add ffmpeg support later
 
-local encodingargs = {
-	H264_CPU = "-c:v libx264 ...",
-    H265_CPU = "-c:v libx265 .."
-}
+local smoothie_rs_path = [[D:\smoothie-rs\bin\smoothie-rs.exe]]
+-- defaults to checking in path
+
+local cut_mode = 'trim'
+    -- available modes (can be cycled through by pressing k):
+
+	-- trim: merge each file's own cut to a single file
+	-- split: each cut is exported in it's own file
 
 local dur = 2500
 	-- Duration of OSC (top left) messages, in milliseconds
 
 local verbose = false
-local mode = 'trim'
-	-- defaults, feel free to change them to whatever you need
+    -- Off by default, can be toggled by pressing Ctrl+v
+
 
 local mp = require 'mp'
 local msg = require 'mp.msg'
@@ -82,8 +88,16 @@ local function get_fn()
 
 	assert(io.open(fn, "r"), "\nFailed to get path " .. fn .. " insufficient permissions?")
 
-	return fn
+	-- additional path checking
+	-- if (io.open(fn, "r") == nil) then
+	-- 	fn = utils.join_path(utils.getcwd(), fn)
+	-- else
+	-- 	print("Failed getting path " .. fn)
+	-- end
 
+	verb("PATH: " .. fn)
+
+	return fn
 end
 
 
@@ -108,12 +122,12 @@ local function selectindex ()
 		items = {}
 	}
 	for i, cur in ipairs(Trs) do
-	if cur['start'] or cur['end'] then
-		menu['items'][i] = {}					     --/fps                                --/fps
-		menu['items'][i]['title'] = (round(cur['start']) or '') .. ' - ' .. (round(cur['fin']) or '')
-		menu['items'][i]['value'] = "script-message setindex " .. i
-		menu['items'][i]['hint'] = get_basename(cur['path'])
-	end
+		if cur['start'] or cur['end'] then
+			menu['items'][i] = {}
+			menu['items'][i]['title'] = (round(cur['start']) or '') .. ' - ' .. (round(cur['fin']) or '')
+			menu['items'][i]['value'] = "script-message setindex " .. i
+			menu['items'][i]['hint'] = get_basename(cur['path'])
+		end
 	end
 
 	mp.commandv('script-message-to', 'uosc', 'open-menu', (utils.format_json(menu)))
@@ -272,46 +286,65 @@ local function getIndex()
 	notify(dur, "[g] Selected index is ".. Index)
 end;mp.add_key_binding("Ctrl+g", "getCurrentIndex", getIndex)
 
-local function start()
+
+local function initIndex()
+
+	if Trs[Index] == nil then
+		Trs[Index] = {}
+	end
+end
+
+
+
+local function start(sof)
+	initIndex()
 	local pos = mp.get_property_number('playback-time/full')
 	local fn = get_fn()
-	local curframe = mp.get_property_number('time-pos')
+	local curframe = "unfilled start"
+	if sof == true then
+		curframe = "0"
+	else
+		curframe = mp.get_property_number('time-pos')
+	end
 
 	if Trs[Index] == nil then Trs[Index] = {} end
 	Trs[Index]['start'] = curframe
 	Trs[Index]['path'] = fn
 
-	notify(dur, "[g] Set start point of index ["..Index.."] at ".. round(pos))
+	notify(dur, "[g] Set start point of index [" .. Index .. "] at " .. round(pos))
 
-	create_chapter();reloadTrs()
-
-end;mp.add_key_binding("g", "set-start", start)
-
-
-
+	create_chapter(); reloadTrs()
+end; mp.add_key_binding("g", "set-start", start)
 
 local function sof()
-	notify(dur, "[S] Setting index " .. Index .. " to 00:00:00 (start of file)")
-	if Trs[Index] == nil then Trs[Index] = {} end
-	Trs[Index]['start'] = 0
-end;mp.add_key_binding("G", "set-sof", sof)
+	
+	start(true)
+
+	-- will probably remove the rest of this function later
 
 
+	-- local fn = get_fn()
+	-- notify(dur, "[G] Setting index " .. Index .. " to 00:00:00 (start of file)")
+	-- if Trs[Index] == nil then Trs[Index] = {} end
+	-- Trs[Index]['start'] = "0"
+	-- Trs[Index]['path'] = fn
+end; mp.add_key_binding("G", "set-sof", sof)
 
 
-local function fin()
-
+local function fin(eof)
+	initIndex()
 	local pos = mp.get_property_number('playback-time/full')
 	local fn = get_fn()
-	local curframe = mp.get_property_number('time-pos')
+	local curframe = "unfilled fin"
+	if eof == true then
+		curframe = string.format(mp.get_property('duration'))
+	else
+		curframe = mp.get_property_number('time-pos')
+	end
 	if Trs[Index] == nil then Trs[Index] = {} end
 	Trs[Index]['fin'] = curframe
 
-	if (io.open(fn, "r") == nil) then
-		fn = utils.join_path(utils.getcwd(), fn)
-	end
-
-	if Trs[Index]['start'] == nil and Trs[Index-1]['start'] ~= nil then
+	if Trs[Index]['start'] == nil and Trs[Index - 1] and Trs[Index - 1]['start'] ~= nil then
 		notify(dur, "[g] You need to set a start point first.")
 		return nil
 		-- Trs[Index-1]['fin'] = curframe
@@ -326,61 +359,155 @@ local function fin()
 	end
 
 	if Trs[Index + 1]['start'] == nil and Trs[Index + 1]['fin'] == nil then -- Only step up if it's the last index
-		Index = Index + 1													 -- Else it means the user has went back down on an older index
+		Index = Index +
+			1                                                            -- Else it means the user has went back down on an older index
 	end
 
-	create_chapter();reloadTrs()
-
-end;mp.add_key_binding("h", "set-fin", fin)
-
-
+	create_chapter(); reloadTrs()
+end; mp.add_key_binding("h", "set-fin", fin)
 
 
 local function eof()
+	fin(true)
 
-	if Trs[Index]['start'] == nil then
-		notify(dur, "[g] You need to set a start point first.")
-		return
+	-- same as sof
+
+	-- local fn = get_fn()
+	-- print("", utils.format_json(Trs))
+	-- if Trs[Index]['start'] == nil then
+	-- 	notify(dur, "[g] You need to set a start point first.")
+	-- 	return
+	-- end
+
+	-- local framecount = mp.get_property('duration')
+	-- notify(dur, "[H] Set end point of index [" .. Index .. "] to " .. framecount .. " (End of file)")
+	-- Trs[Index]['fin'] = string.format(framecount)
+	-- Trs[Index]['path'] = fn
+end; mp.add_key_binding("H", "set-eof", eof)
+
+local function checkTrs(tbl)
+	-- Check if the table is empty
+	if next(tbl) == nil then
+		print("next is nil ")
+		return false
 	end
 
-	local framecount = mp.get_property('duration')
-	notify(dur, "[H] Set end point of index ["..Index.."] to ".. framecount .. " (End of file)")
-	Trs[Index]['fin'] = framecount
-end;mp.add_key_binding("H", "set-eof", eof)
+	-- Get the last element of the table
+	local lastObject = tbl[#tbl]
 
-
-
+	-- Check if the last object contains all required keys
+	if lastObject.path and lastObject.fin and lastObject.start then
+		print("contains all keys")
+		return true
+	else
+		print("insuficient keys")
+		print(utils.format_json(tbl[#tbl]))
+		print(utils.format_json(tbl))
+		return false
+	end
+end
 
 local function render()
-	Trs[#Trs] = nil -- beautiful syntax to remove last object
-	Cmd = {args={'sm','-json', utils.format_json(Trs)}}
-	if mode == 'split' then table.insert(Cmd.args,'-split')
-	elseif mode == 'trim' then table.insert(Cmd.args,'-trim')
-	else print('UKNOWN MODE: ' .. mode) end
-	if verbose == true then
-		table.insert(Cmd.args,'-verbose')
-		local command = ''
-		for _, k in pairs(Cmd.args) do -- awful for loop to join array to string
-			command = command .. k .. ' '
-		end
-		print('COMMAND: ' .. command)
+	Commands = {}
+	if checkTrs(Trs) == false then
+		Trs[#Trs] = nil
 	end
-	utils.subprocess_detached(Cmd)
+	-- this fixed something at some point
+	-- Trs[#Trs] = nil -- remove last object
+
+	if cut_mode == 'split' then
+		for key, val in pairs(Trs) do
+			Cmd = {
+				args = {
+					-- smoothie_rs_path,
+					"-i", val['path'],
+					"--override", "runtime;cut type;trim",
+					"--stripaudio",
+					"--override", "runtime;timecodes;" .. val['start'] .. '-' .. val['fin']
+				}
+			}
+			Commands[#Commands + 1] = Cmd
+		end
+	elseif cut_mode == 'trim' then
+		local unique = {}
+
+		for key, value in pairs(Trs) do
+			if not unique[value.path] then
+				unique[value.path] = {}
+			end
+			unique[value.path][#unique[value.path] + 1] = { start = value['start'], fin = value['fin'] }
+		end
+
+		for key, value in pairs(unique) do
+			Cmd = {
+				args = {
+					-- smoothie_rs_path,
+					"-i", key,
+					"--override", "runtime;cut type;trim",
+					"--stripaudio",
+					"--override"
+				}
+			}
+			local arg = "runtime;timecodes"
+			for index, timecodes in ipairs(value) do
+				-- print(index, utils.format_json(timecodes))
+
+				arg = arg .. ';' .. timecodes['start'] .. '-' .. timecodes['fin']
+			end
+			table.insert(Cmd.args, arg)
+			Commands[#Commands + 1] = Cmd
+		end
+	end
+
+	mp.set_property("vo", "null")
+	mp.commandv('quit')
+
+	for _, Cmd in pairs(Commands) do
+		local command = ''
+		for _, arg in pairs(Cmd.args) do -- awful for loop to join array to string
+			if arg:match(" ") then
+				command = command .. '"' .. arg .. '"' .. ' '
+			else
+				command = command .. arg .. ' '
+			end
+		end
+		-- end
+
+		if verbose == true then
+			command = command .. ' --verbose'
+			print('COMMAND: ' .. command)
+		end
+
+		-- another way
+		-- mp.command_native({
+		-- 	name = "subprocess",
+		-- 	playback_only = false,
+		-- 	capture_stdout = true,
+		-- 	args = Cmd.args,
+		-- 	detach = true
+		-- })
+
+		local ffi = require("ffi")
+		ffi.cdef [[
+			int system(const char *command);
+		]]
+		ffi.C.system(smoothie_rs_path .. " " .. command)
+	end
 	mp.commandv('quit')
 end;mp.add_key_binding("Ctrl+r", "exportSLC", render)
 
 
 
 
-local function cycleModes()
-	if mode == 'trim' then
+local function cycleCutModes()
+	if cut_mode == 'trim' then
 		notify(dur, "[k] SPLIT MODE: Separating cuts into separate files")
-		mode = 'split'
-	elseif mode == 'split' then
+		cut_mode = 'split'
+	elseif cut_mode == 'split' then
 		notify(dur, "[k] TRIM MODE: Joining each videos' cuts")
-		mode = 'trim'
+		cut_mode = 'trim'
 	end
-end;mp.add_key_binding("k", "toggleSLCexportModes", cycleModes)
+end; mp.add_key_binding("k", "toggleSLCexportModes", cycleCutModes)
 
 
 
