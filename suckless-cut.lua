@@ -1,7 +1,7 @@
 local default_export_mode = "smoothie"
 -- may also add ffmpeg support later
 
-local smoothie_rs_path = [[D:\smoothie-rs\bin\smoothie-rs.exe]]
+local smoothie_rs_path = [[smoothie-rs]]
 -- defaults to checking in path
 
 local cut_mode = 'trim'
