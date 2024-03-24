@@ -1,25 +1,78 @@
-local default_export_mode = "smoothie"
--- may also add ffmpeg support later
+local config = {
+	export_mode = "ffmpeg"
+	--[[
+		supported:
 
-local smoothie_rs_path = [[smoothie-rs]]
--- defaults to checking in path
+		- smoothie
+		- ffmpeg
 
-local cut_mode = 'trim'
--- available modes (can be cycled through by pressing k):
+		cycle by pressing K
+	]]
+	,smoothie_path = "smoothie-rs"
+	,ffmpeg_path = "ffmpeg"
+	--[[
 
--- trim: merge each file's own cut to a single file
--- split: each cut is exported in it's own file
+		defaults to checking in path
 
-local dur = 2500
--- Duration of OSC (top left) messages, in milliseconds
+		Windows users: DO NOT FORGET TO ESCAPE \ BY DOUBLING THEM, i.e.:
 
-local verbose = false
--- Off by default, can be toggled by pressing Ctrl+v
+		"D:\\This\\is\\OKAY\\smoothie-rs.exe"
+
+		"D:\This\is NOT\OKAY\smoothie-rs.exe"
+
+	]] --
 
 
+	,cut_mode = 'trim'
+	--[[
+
+		supported:
+		
+		- trim: merge each file's own cut to a single file
+		- split: each cut is exported in it's own file
+
+		cycle by pressing k
+
+	]] --
+	,switch_above = 119
+
+	,output_directory = ""
+	--[[
+
+		folder where videos get outputed, there's three possible settings:
+
+		- an empty strings which means output in the same directory as the video
+		- "." for working directory
+		- "D:\\Videos\\", do not forget to duplicate back slashes \
+
+	]] --
+
+	,dur = 2500
+	-- Duration of OSC (top left) messages, in milliseconds
+
+	,verbose = false
+	-- Off by default, can be toggled by pressing Ctrl+v
+}
+require "mp.options".read_options(config, "suckless-cut")
 local mp = require 'mp'
 local msg = require 'mp.msg'
 local utils = require 'mp.utils'
+local switchExportRan = false
+
+mp.register_event("file-loaded", function()
+	local container_fps = mp.get_property('container-fps')
+	if container_fps == nil then return end
+	local vid_fps = tonumber(container_fps)
+
+	if vid_fps == 0 or switchExportRan then
+		-- disabled by user / already ran
+		return
+	elseif config.switch_above > vid_fps then
+		print("FPS is above trigger limit, switching export mode to smoothie")
+		config.export_mode = "smoothie"
+	end
+	switchExportRan = true
+end)
 
 Osdwarn = false -- Used when user made too many trimming points
 Trs = {}        -- Creates a fresh empty table, will be appended start/fin timecodes
@@ -32,7 +85,7 @@ local function verb(...)
 	for i, v in ipairs(args) do
 		text = text .. tostring(v)
 	end
-	if verbose == true then
+	if config.verbose == true then
 		print("VERB", text)
 	end
 end
@@ -47,7 +100,7 @@ local function notify(duration, ...)
 		text = text .. tostring(v)
 	end
 
-	if text == nil then
+	if text == nil or text == "" then
 		return
 	end
 
@@ -71,7 +124,7 @@ end; mp.add_key_binding("Ctrl+d", "dump", dump)
 
 
 local function setindex(index)
-	notify(dur, ("Setting index to [" .. index .. "]"))
+	notify(config.dur, ("Setting index to [" .. index .. "]"))
 	Index = index
 end
 mp.register_script_message('setindex', setindex)
@@ -87,7 +140,7 @@ local function get_fn()
 
 	assert(io.open(fn, "r"), "\nFailed to get path " .. fn .. " insufficient permissions?")
 
-	-- additional path checking
+	-- -- additional path checking
 	-- if (io.open(fn, "r") == nil) then
 	-- 	fn = utils.join_path(utils.getcwd(), fn)
 	-- else
@@ -203,16 +256,16 @@ mp.register_event("file-loaded", reloadTrs)
 
 local function incrIndex()
 	if #Trs < 2 and Trs[Index + 1] == nil then
-		notify(dur, "You only have one starter index,\nstart making a second index before cycling through them.")
+		notify(config.dur, "You only have one starter index,\nstart making a second index before cycling through them.")
 		return
 	end
 
 	if Trs[Index + 1] == nil then
 		Index = 1 -- Looping through
-		notify(dur, "[c] (Looping) Increased index back down to " .. Index)
+		notify(config.dur, "[c] (Looping) Increased index back down to " .. Index)
 	else
 		Index = Index + 1
-		notify(dur, "[C] Increased index to " .. Index)
+		notify(config.dur, "[C] Increased index to " .. Index)
 	end
 end; mp.add_key_binding("C", "increaseIndex", incrIndex)
 
@@ -221,16 +274,16 @@ end; mp.add_key_binding("C", "increaseIndex", incrIndex)
 
 local function decrIndex()
 	if #Trs < 2 then
-		notify(dur, "You only have one starter index,\nstart making a second index before cycling through them.")
+		notify(config.dur, "You only have one starter index,\nstart making a second index before cycling through them.")
 		return
 	end
 
 	if Trs[Index - 1] == nil then
 		Index = #Trs -- Looping through
-		notify(dur, "[c] (Looping) Lowered index back up to " .. Index)
+		notify(config.dur, "[c] (Looping) Lowered index back up to " .. Index)
 	else
 		Index = Index - 1
-		notify(dur, "[c] Lowered index to " .. Index)
+		notify(config.dur, "[c] Lowered index to " .. Index)
 	end
 end; mp.add_key_binding("c", "decreaseIndex", decrIndex)
 
@@ -238,18 +291,22 @@ end; mp.add_key_binding("c", "decreaseIndex", decrIndex)
 
 
 local function showPoints()
-	if verbose then
+	if config.verbose then
 		print(utils.format_json(Trs))
 	end
 
+	print("export mode: " .. config.export_mode)
+	print("cut mode: " .. config.cut_mode)
+
 	if #Trs == 0 then
-		notify(dur, "No trimming points yet")
+		notify(config.dur,
+			"cut mode: " .. config.cut_mode .. " | export mode: " .. config.export_mode .. "\nNo trimming points yet")
 		return
 	end
 
-	msg = "Trimming points:"
+	msg = "cut mode: " .. config.cut_mode .. " | export mode: " .. config.export_mode .. "\n"
 	if #Trs > 11 and Osdwarn == false then
-		notify(dur, "You have too much trimming points\nfor it to fit on the OSD, check the console.")
+		notify(config.dur, "You have too much trimming points\nfor it to fit on the OSD, check the console.")
 		Osdwarn = true
 		return
 	end
@@ -266,14 +323,14 @@ local function showPoints()
 		end
 	end
 	print(msg)
-	mp.osd_message(msg, dur / 500) -- 2x longer than normal dur, divide by / 1000 for same length
+	mp.osd_message(msg, config.dur / 500) -- 2x longer than normal dur, divide by / 1000 for same length
 end; mp.add_key_binding("Ctrl+p", "showPoints", showPoints)
 
 
 
 
 local function getIndex()
-	notify(dur, "[g] Selected index is " .. Index)
+	notify(config.dur, "[g] Selected index is " .. Index)
 end; mp.add_key_binding("Ctrl+g", "getCurrentIndex", getIndex)
 
 
@@ -300,7 +357,7 @@ local function start(sof)
 	Trs[Index]['start'] = curframe
 	Trs[Index]['path'] = fn
 
-	notify(dur, "[g] Set start point of index [" .. Index .. "] at " .. round(pos))
+	notify(config.dur, "[g] Set start point of index [" .. Index .. "] at " .. round(pos))
 
 	create_chapter(); reloadTrs()
 end; mp.add_key_binding("g", "set-start", start)
@@ -333,14 +390,14 @@ local function fin(eof)
 	Trs[Index]['fin'] = curframe
 
 	if Trs[Index]['start'] == nil and Trs[Index - 1] and Trs[Index - 1]['start'] ~= nil then
-		notify(dur, "[g] You need to set a start point first.")
+		notify(config.dur, "[g] You need to set a start point first.")
 		return nil
 		-- Trs[Index-1]['fin'] = curframe
 	end
 
 	Trs[Index]['path'] = fn
 
-	notify(dur, "[h] Set end point of index [" .. Index .. "] at " .. round(pos))
+	notify(config.dur, "[h] Set end point of index [" .. Index .. "] at " .. round(pos))
 
 	if Trs[Index + 1] == nil then
 		Trs[Index + 1] = {}
@@ -373,6 +430,19 @@ local function eof()
 	-- Trs[Index]['path'] = fn
 end; mp.add_key_binding("H", "set-eof", eof)
 
+
+---------------------------------------------------
+-- the following functions are used by render() ---
+---------------------------------------------------
+
+local function sanitizeFilepath(filepath)
+	local sanitized = filepath
+    if package.config:sub(1,1) == '\\' then -- Check if the system is Windows
+		sanitized = filepath:gsub("/", "\\")  -- Replace forward slashes with backslashes
+    end
+    return sanitized
+end
+
 local function checkTrs(tbl)
 	-- Check if the table is empty
 	if next(tbl) == nil then
@@ -395,7 +465,52 @@ local function checkTrs(tbl)
 	end
 end
 
+local function appendSuffix(path, suffix)
+	local basename = path:match("^.+[\\/](.+)$")
+	if basename then
+		local dotIndex = basename:find("%.")
+		if dotIndex then
+			local namePart = basename:sub(1, dotIndex - 1)
+			local extension = basename:sub(dotIndex)
+			return path:sub(1, -(#basename + 1)) .. namePart .. suffix .. extension
+		else
+			return path .. suffix
+		end
+	else
+		error("Failed adding suffix '" .. suffix .. "' to video file path " .. path, 1)
+	end
+end
+
+-- https://docs.python.org/3/library/tempfile.html#tempfile.gettempdir
+local tempfolder = os.getenv("TEMP")
+if utils.readdir(tempfolder) == nil then
+	tempfolder = os.getenv("TMPDIR")
+	if utils.readdir(tempfolder) == nil then
+		if package.config:sub(1, 1) == '\\' then
+			tempfolder = "C:\\Temp"
+		else
+			tempfolder = "/tmp"
+		end
+		if utils.readdir(tempfolder) == nil then
+			error("failed to find temp folder")
+		end
+	end
+end
+
+local function table_to_args(args)
+	for index, object in ipairs(args) do
+		if string.find(object, "%s") then
+			args[index] = '"' .. object .. '"'
+		end
+	end
+
+	return table.concat(args, " ")
+end
+
 local function render()
+	-- hides https://mpv.io/manual/master/#terminal-status-line
+	mp.set_property_bool("quiet", true)
+
 	Commands = {}
 	if checkTrs(Trs) == false then
 		Trs[#Trs] = nil
@@ -403,20 +518,178 @@ local function render()
 	-- this fixed something at some point
 	-- Trs[#Trs] = nil -- remove last object
 
-	if cut_mode == 'split' then
-		for key, val in pairs(Trs) do
-			Cmd = {
-				args = {
-					-- smoothie_rs_path,
-					"-i", val['path'],
-					"--override", "runtime;cut type;trim",
-					"--stripaudio",
-					"--override", "runtime;timecodes;" .. val['start'] .. '-' .. val['fin']
+	local ffi = require("ffi")
+	ffi.cdef [[
+		int system(const char *command);
+	]]
+
+	if config.cut_mode == 'split' then
+		if config.export_mode == "smoothie" then
+			for _, val in pairs(Trs) do
+				Cmd = {
+					args = {
+						"-i", val['path'],
+						"--override", "runtime;cut type;trim",
+						"--stripaudio",
+						"--override", "runtime;timecodes;" .. val['start'] .. '-' .. val['fin']
+					}
 				}
-			}
+			end
+			Commands[#Commands + 1] = Cmd
+		elseif config.export_mode == 'ffmpeg' then
+			for _, val in pairs(Trs) do
+				local outPath = appendSuffix(
+					val['path'],
+					round(val['start']) .. '-' .. round(val['fin'])
+				)
+				Cmd = {
+					args = {
+						"-loglevel", "error",
+						"-stats",
+						"-i", val['path'],
+						"-map", "0",
+						"-ss", val['start'],
+						"-to", val['fin'],
+						"-c", "copy",
+						outPath
+					}
+				}
+				Commands[#Commands + 1] = Cmd
+			end
+		end
+	elseif config.cut_mode == 'trim' then
+		local unique = {}
+
+		for _, value in pairs(Trs) do
+			if not unique[value.path] then
+				unique[value.path] = {}
+			end
+			unique[value.path][#unique[value.path] + 1] = { start = value['start'], fin = value['fin'] }
+		end
+
+		if config.export_mode == "smoothie" then
+			for key, value in pairs(unique) do
+				Cmd = {
+					args = {
+						"-i", key,
+						"--override", "runtime;cut type;trim",
+						"--stripaudio",
+						"--override"
+					}
+				}
+				local arg = "runtime;timecodes"
+				for index, timecodes in ipairs(value) do
+					-- print(index, utils.format_json(timecodes))
+
+					arg = arg .. ';' .. timecodes['start'] .. '-' .. timecodes['fin']
+				end
+				arg = '"' .. arg .. '"'
+				table.insert(Cmd.args, arg)
+				Commands[#Commands + 1] = Cmd
+			end
+		elseif config.export_mode == "ffmpeg" then
+			print("unique: " .. utils.format_json(unique))
+			for in_path, cuts in pairs(unique) do
+				local cutted_paths = {}
+				for _, cut in pairs(cuts) do
+					local outPath = sanitizeFilepath(utils.join_path(
+						tempfolder,
+						get_basename(in_path) .. '-' .. cut.start .. '-' .. cut.fin .. "-cut.mkv"
+					))
+
+					local args = table_to_args({
+						"-loglevel", "error",
+						"-stats",
+						"-i", in_path,
+						"-map", "0",
+						"-ss", cut.start,
+						"-to", cut.fin,
+						"-c", "copy",
+						outPath
+
+					})
+					cutted_paths[#cutted_paths + 1] = outPath
+					verb("temp cut: " .. args)
+
+					ffi.C.system(config.ffmpeg_path .. " " .. args)
+				end
+
+				local concat_path = utils.join_path(tempfolder, "slc-concat-temp.txt")
+				local file = io.open(concat_path, "w")
+
+				-- print("cutted paths: " .. utils.to_string(cutted_paths))
+
+				if not file then
+					error("Unable to open file '" .. concat_path .. "' for writing.")
+				end
+
+				for index, path in ipairs(cutted_paths) do
+					verb("writing " .. index .. " line '" .. path .. "'")
+					file:write("file '" .. path .. "'\n")
+				end
+				file:close()
+
+				local args = table_to_args({
+					"-hide_banner",
+					"-loglevel", "error",
+					"-stats",
+
+					"-f", "concat",
+					"-safe", "0",
+					"-i", concat_path,
+					"-c", "copy",
+
+					"-default_mode", "infer_no_subs",
+					"-ignore_unknown",
+					"-strict", "experimental",
+
+					appendSuffix(in_path, "-trim")
+				})
+
+				verb("final concat :" .. args)
+
+				ffi.C.system(config.ffmpeg_path .. " " .. args)
+			end
+		else
+			error("Unknown export mode '" .. config.export_mode .. "'")
+		end
+	end
+
+	--[[
+	if config.cut_mode == 'split' then
+		for key, val in pairs(Trs) do
+			if config.export_mode == 'smoothie' then
+				verb('setting smoothie split args')
+
+				Cmd = {
+					args = {
+						"-i", val['path'],
+						"--override", "runtime;cut type;trim",
+						"--stripaudio",
+						"--override", "runtime;timecodes;" .. val['start'] .. '-' .. val['fin']
+					}
+				}
+			elseif config.export_mode == 'ffmpeg' then
+				verb('setting ffmpeg split args')
+				local outPath = appendSuffix(
+					val['path'],
+					round(val['start']) .. '-' .. round(val['fin'])
+				)
+				Cmd = {
+					args = {
+						"-loglevel", "error",
+						"-stats",
+						"-i", val['path'],
+						"-ss", val['start'],
+						"-to", val['fin'],
+						"-c", "copy",
+						outPath
+					}
+				}
+			end
 			Commands[#Commands + 1] = Cmd
 		end
-	elseif cut_mode == 'trim' then
+	elseif config.cut_mode == 'trim' then
 		local unique = {}
 
 		for key, value in pairs(Trs) do
@@ -427,47 +700,54 @@ local function render()
 		end
 
 		for key, value in pairs(unique) do
-			Cmd = {
-				args = {
-					-- smoothie_rs_path,
-					"-i", key,
-					"--override", "runtime;cut type;trim",
-					"--stripaudio",
-					"--override"
+			if config.export_mode == "smoothie" then
+				Cmd = {
+					args = {
+						"-i", key,
+						"--override", "runtime;cut type;trim",
+						"--stripaudio",
+						"--override"
+					}
 				}
-			}
-			local arg = "runtime;timecodes"
-			for index, timecodes in ipairs(value) do
-				-- print(index, utils.format_json(timecodes))
+				local arg = "runtime;timecodes"
+				for index, timecodes in ipairs(value) do
+					-- print(index, utils.format_json(timecodes))
 
-				arg = arg .. ';' .. timecodes['start'] .. '-' .. timecodes['fin']
+					arg = arg .. ';' .. timecodes['start'] .. '-' .. timecodes['fin']
+				end
+				arg = '"' .. arg .. '"'
+				table.insert(Cmd.args, arg)
+				Commands[#Commands + 1] = Cmd
+			else
+				print("\27[31mffmpeg  yet\27[0m")
 			end
-			arg = '"' .. arg .. '"'
-			table.insert(Cmd.args, arg)
-			Commands[#Commands + 1] = Cmd
 		end
 	end
+	]]
 
-	mp.set_property("vo", "null")
-	mp.commandv('quit')
+	if not config.verbose then
+		mp.set_property("vo", "null")
+		mp.commandv('quit')
+	end
 
 	for _, Cmd in pairs(Commands) do
 		local command = ''
-		for _, arg in pairs(Cmd.args) do -- awful for loop to join array to string
-			if arg:match(" ") then
-				command = command .. '"' .. arg .. '"' .. ' '
-			else
-				command = command .. arg .. ' '
+		verb("what even is args: " .. utils.format_json(Cmd.args))
+
+		for i, element in ipairs(Cmd.args) do
+			if string.find(element, "%s") then
+				Cmd.args[i] = '"' .. element .. '"'
 			end
 		end
-		-- end
 
-		if verbose == true then
+		command = table.concat(Cmd.args, " ")
+
+		if config.verbose == true and config.export_mode == "smoothie" then
 			command = command .. ' --verbose'
 			print('COMMAND: ' .. command)
 		end
 
-		-- another way
+		-- -- another way
 		-- mp.command_native({
 		-- 	name = "subprocess",
 		-- 	playback_only = false,
@@ -476,37 +756,69 @@ local function render()
 		-- 	detach = true
 		-- })
 
-		local ffi = require("ffi")
-		ffi.cdef [[
-			int system(const char *command);
-		]]
-		ffi.C.system(smoothie_rs_path .. " " .. command)
+		if config.export_mode == "smoothie" then
+			ffi.C.system(config.smoothie_path .. " " .. command)
+
+		elseif config.export_mode == "ffmpeg" and config.cut_mode == "split" then
+
+			ffi.C.system(config.ffmpeg_path .. " " .. command)
+		end
+
+
+		-- print(utils.to_string(config.export_mode ~= "smoothie") .. " AND " .. utils.to_string(config.cut_mode ~= "trim"))
+		-- if config.export_mode ~= "smoothie" and config.cut_mode ~= "trim" then
+		-- 	print("we gud :3")
+		-- 	if config.export_mode == "smoothie" then
+		-- 		print("haha!")
+		-- 		ffi.C.system(config.smoothie_path .. " " .. command)
+		-- 	elseif config.export_mode == "ffmpeg" then
+		-- 		ffi.C.system(config.ffmpeg_path .. " " .. command)
+		-- 	else
+		-- 		error("Unknown export mode \"" .. config.export_mode .. "\"")
+		-- 	end
+		-- end
 	end
-	mp.commandv('quit')
+
+	if not config.verbose then
+		mp.commandv('quit')
+	end
+
+	mp.set_property_bool("quiet", false)
 end; mp.add_key_binding("Ctrl+r", "exportSLC", render)
 
 
 
 
 local function cycleCutModes()
-	if cut_mode == 'trim' then
-		notify(dur, "[k] SPLIT MODE: Separating cuts into separate files")
-		cut_mode = 'split'
-	elseif cut_mode == 'split' then
-		notify(dur, "[k] TRIM MODE: Joining each videos' cuts")
-		cut_mode = 'trim'
+	if config.cut_mode == 'trim' then
+		notify(config.dur, "[k] SPLIT MODE: Separating cuts into separate files")
+		config.cut_mode = 'split'
+	elseif config.cut_mode == 'split' then
+		notify(config.dur, "[k] TRIM MODE: Joining each videos' cuts")
+		config.cut_mode = 'trim'
 	end
-end; mp.add_key_binding("k", "toggleSLCexportModes", cycleCutModes)
+end; mp.add_key_binding("k", "toggleCutModes", cycleCutModes)
 
-
+local function cycleExportModes()
+	if config.export_mode == 'ffmpeg' then
+		notify(config.dur, "[k] EXPORT MODE: smoothie")
+		config.export_mode = 'smoothie'
+	elseif config.export_mode == 'smoothie' then
+		notify(config.dur, "[k] EXPORT MODE: ffmpeg")
+		config.export_mode = 'ffmpeg'
+	else
+		notify(config.dur, "unknown export mode '" .. config.export_mode .. "' falling back to ffmpeg")
+		config.export_mode = 'ffmpeg'
+	end
+end; mp.add_key_binding("K", "toggleExportModes", cycleExportModes)
 
 
 local function toggleVerb()
-	if verbose == true then
-		notify(dur, "[Ctrl+v] toggled off Verbose")
-		verbose = false
-	elseif verbose == false then
-		notify(dur, "[Ctrl+v] toggled on Verbose")
-		verbose = true
+	if config.verbose == true then
+		notify(config.dur, "[Ctrl+v] toggled off Verbose")
+		config.verbose = false
+	elseif config.verbose == false then
+		notify(config.dur, "[Ctrl+v] toggled on Verbose")
+		config.verbose = true
 	end
 end; mp.add_key_binding("Ctrl+v", "toggleSLCverbose", toggleVerb)
