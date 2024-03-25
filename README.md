@@ -1,9 +1,6 @@
-> [!WARNING]
-> ffmpeg export is not supported, it currently only is with [smoothie-rs](https://github.com/couleur-tweak-tips/smoothie-rs), see [alternatives](#alternatives) for now
-
 # suckless-cut
 
-I recreated the features I liked from [losslesscut](https://github.com/mifi/lossless-cut) in the [mpv](https://mpv.io) video player via a lua script
+I recreated the features I liked from [losslesscut](https://github.com/mifi/lossless-cut) in the [mpv](https://mpv.io) (not [mpv.net](https://github.com/mpvnet-player/mpv.net)) video player via a lua script
 
 <details>
 <summary>Why?</summary>
@@ -67,20 +64,27 @@ After setting a start and end point, setting another start point will automatica
 
 ![image](https://github.com/couleur-tweak-tips/suckless-cut/releases/download/readme-assets/selector.webp)
 
+* <kbd>K</kbd> cycles export modes, available: 
+    * [smoothie](https://github.com/couleur-tweak-tips/smoothie-rs)
+    * [ffmpeg](https://ffmpeg.org)
 
-* <kbd>k</kbd> cycles between cutting modes:
+> [!WARNING]
+> smoothie export don't contain audio, to circumvent this cut with ffmpeg first then run it manually through smoothie
+
+* <kbd>k</kbd> cycles cutting modes:
     * `split` separates every single cut into separate files
     * `trim` merges and joins the multiple cuts you have per video
 
 ### Debugging
 
 * <kbd>Ctrl+v</kbd> toggles on/off verbose
-<!--
-* <kbd>CTRL+e</kbd> toggles exporting modes:
-    * FFmpeg with keyframe cutting
-    * [Smoothie](https://github.com/couleur-tweak-tips/Smoothie), my VapourSynth-based motion blur program
-        * Default behavior when the script inits can be set in the first few lines of the lua script, when you are [installing Smoothie](https://github.com/couleur-tweak-tips/TweakList/blob/master/modules/Installers/Invoke-SmoothiePost.ps1) the default gets changed to Smoothie
--->
+
+## How to cut at each keyframe (for better results while cutting with ffmpeg)
+
+Keyframes are arbitrary timestamps in a video that are preferable to cut at, if not you may experience desync or your video not embedding.
+
+To seek through each keyframes: move your cursor over to the seekbar and use your mouse scroll wheel on it to seek across keyframes, then set your start/end points with `g` `h` there. todo: find/add keybinds to easily do this via the keyboard
+
 
 # Alternatives
 
