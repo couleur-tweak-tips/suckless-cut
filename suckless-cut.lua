@@ -546,9 +546,9 @@ local function render()
 					args = {
 						"-loglevel", "error",
 						"-stats",
+						"-ss", val['start'],
 						"-i", val['path'],
 						"-map", "0",
-						"-ss", val['start'],
 						"-to", val['fin'],
 						"-c", "copy",
 						outPath
@@ -600,9 +600,9 @@ local function render()
 					local args = table_to_args({
 						"-loglevel", "error",
 						"-stats",
+						"-ss", cut.start,
 						"-i", in_path,
 						"-map", "0",
-						"-ss", cut.start,
 						"-to", cut.fin,
 						"-c", "copy",
 						outPath
