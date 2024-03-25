@@ -3,8 +3,6 @@ name: Rust
 on:
   push:
     branches: [ "main" ]
-    paths:
-      - /suckless-cut.lua
 
 jobs:
   release-win:
