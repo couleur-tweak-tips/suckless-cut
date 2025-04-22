@@ -12,7 +12,7 @@ local config = {
 	,ffmpeg_path = "ffmpeg"
 	--[[
 
-		defaults to checking in path
+		defaults to checking in PATH
 
 		Windows users: DO NOT FORGET TO ESCAPE \ BY DOUBLING THEM, i.e.:
 
@@ -39,9 +39,9 @@ local config = {
 	,output_directory = ""
 	--[[
 
-		folder where videos get outputed, there's three possible settings:
+		folder where videos get outputted, there's 3 possible settings:
 
-		- an empty strings which means output in the same directory as the video
+		- "" will output files in the same directory as the input file
 		- "." for working directory
 		- "D:\\Videos\\", do not forget to duplicate back slashes \
 
@@ -135,7 +135,7 @@ local function round(int)
 	return (math.floor(int * 100)) / 100
 end
 
-local function get_fn()
+local function get_fn() -- fn for File Name
 	local fn = utils.join_path(mp.get_property("working-directory", ""), (mp.get_property("path", "")))
 
 	assert(io.open(fn, "r"), "\nFailed to get path " .. fn .. " insufficient permissions?")
@@ -171,6 +171,7 @@ local function selectindex()
 		title = 'Select an index to switch back to',
 		items = {}
 	}
+
 	for i, cur in ipairs(Trs) do
 		if cur['start'] or cur['end'] then
 			menu['items'][i] = {}
@@ -179,7 +180,6 @@ local function selectindex()
 			menu['items'][i]['hint'] = get_basename(cur['path'])
 		end
 	end
-
 	mp.commandv('script-message-to', 'uosc', 'open-menu', (utils.format_json(menu)))
 end; mp.add_key_binding("Ctrl+t", "selectindex", selectindex)
 
@@ -665,7 +665,6 @@ local function render()
 					args = {
 						"-i", val['path'],
 						"--override", "runtime;cut type;trim",
-						"--stripaudio",
 						"--override", "runtime;timecodes;" .. val['start'] .. '-' .. val['fin']
 					}
 				}
@@ -705,7 +704,6 @@ local function render()
 					args = {
 						"-i", key,
 						"--override", "runtime;cut type;trim",
-						"--stripaudio",
 						"--override"
 					}
 				}
@@ -758,9 +756,7 @@ local function render()
 
 		if config.export_mode == "smoothie" then
 			ffi.C.system(config.smoothie_path .. " " .. command)
-
 		elseif config.export_mode == "ffmpeg" and config.cut_mode == "split" then
-
 			ffi.C.system(config.ffmpeg_path .. " " .. command)
 		end
 
@@ -801,10 +797,10 @@ end; mp.add_key_binding("k", "toggleCutModes", cycleCutModes)
 
 local function cycleExportModes()
 	if config.export_mode == 'ffmpeg' then
-		notify(config.dur, "[k] EXPORT MODE: smoothie")
+		notify(config.dur, "[K] EXPORT MODE: smoothie")
 		config.export_mode = 'smoothie'
 	elseif config.export_mode == 'smoothie' then
-		notify(config.dur, "[k] EXPORT MODE: ffmpeg")
+		notify(config.dur, "[K] EXPORT MODE: ffmpeg")
 		config.export_mode = 'ffmpeg'
 	else
 		notify(config.dur, "unknown export mode '" .. config.export_mode .. "' falling back to ffmpeg")
